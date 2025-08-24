@@ -271,22 +271,30 @@ with col1:
                 if "error" in result:
                     st.error(f"❌ {result['error']}")
                     
-                    # 显示调试信息
+                    # 显示详细调试信息
                     if "debug_info" in result:
-                        with st.expander("🔧 调试信息", expanded=True):
+                        with st.expander("🔧 详细调试信息", expanded=True):
                             debug_info = result["debug_info"]
                             
                             if isinstance(debug_info, dict):
+                                st.write("**错误详情:**")
                                 for key, value in debug_info.items():
-                                    st.text(f"{key}: {value}")
+                                    if key == "suggestion":
+                                        st.info(f"💡 建议: {value}")
+                                    elif key == "error_type":
+                                        st.warning(f"⚠️ 错误类型: {value}")
+                                    else:
+                                        st.text(f"{key}: {value}")
                             else:
                                 st.text(str(debug_info))
                             
-                            st.info("💡 建议：")
-                            st.write("1. 检查链接是否需要登录访问")
-                            st.write("2. 尝试在浏览器中直接访问该链接")
-                            st.write("3. 确认链接是否为有效的1688商品页面")
-                            st.write("4. 云环境可能存在网络访问限制")
+                            st.divider()
+                            st.write("**常见解决方案:**")
+                            st.write("1. 🌐 检查链接是否需要登录访问")
+                            st.write("2. 🖥️ 尝试在浏览器中直接访问该链接")
+                            st.write("3. 🔗 确认链接是否为有效的1688商品页面")
+                            st.write("4. ☁️ 云环境可能存在网络访问限制，建议稍后重试")
+                            st.write("5. 📱 某些商品可能只在移动端可访问")
                 else:
                     st.session_state.product_info = result
                     st.success("✅ 1688商品信息抓取成功！")
@@ -302,10 +310,16 @@ with col1:
                             if "quality_details" in debug_info:
                                 st.write("**详细评估:**")
                                 for detail in debug_info["quality_details"]:
-                                    st.text(detail)
+                                    if detail.startswith("✓"):
+                                        st.success(detail)
+                                    else:
+                                        st.error(detail)
                             
                             if "extraction_method" in debug_info:
                                 st.info(f"抓取方式: {debug_info['extraction_method']}")
+                            
+                            if "page_title" in debug_info:
+                                st.write(f"页面标题: {debug_info['page_title']}")
                     
                     rerun_app()
         else:

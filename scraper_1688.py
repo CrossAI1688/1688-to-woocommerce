@@ -64,6 +64,47 @@ class Product1688Scraper:
             return match.group(1)
         return None
     
+    def _cloud_friendly_request(self, url: str, headers: Dict) -> Optional[requests.Response]:
+        """云环境友好的请求方法，处理特殊网络限制"""
+        try:
+            logger.info("尝试使用云环境友好请求方法")
+            
+            # 创建新的会话，避免复用可能有问题的连接
+            cloud_session = requests.Session()
+            
+            # 设置更宽松的请求参数
+            cloud_session.headers.update(headers)
+            
+            # 尝试不同的请求参数组合
+            request_params = [
+                {'timeout': 30, 'allow_redirects': True, 'verify': True},
+                {'timeout': 45, 'allow_redirects': True, 'verify': False},  # 禁用SSL验证
+                {'timeout': 30, 'allow_redirects': False, 'verify': True}   # 禁用重定向
+            ]
+            
+            for i, params in enumerate(request_params):
+                try:
+                    logger.info(f"尝试云环境请求方法 {i+1}: {params}")
+                    response = cloud_session.get(url, **params)
+                    
+                    # 检查响应是否有效
+                    if response.status_code < 500 and len(response.content) > 500:
+                        logger.info(f"云环境请求方法 {i+1} 成功")
+                        return response
+                    else:
+                        logger.warning(f"云环境请求方法 {i+1} 返回无效响应: 状态码 {response.status_code}, 内容长度 {len(response.content)}")
+                        
+                except Exception as method_error:
+                    logger.warning(f"云环境请求方法 {i+1} 失败: {str(method_error)}")
+                    continue
+            
+            logger.error("所有云环境请求方法都失败")
+            return None
+            
+        except Exception as e:
+            logger.error(f"云环境友好请求方法异常: {str(e)}")
+            return None
+    
     def get_page_content(self, url: str, max_retries: int = 3) -> Optional[BeautifulSoup]:
         """获取页面内容，增强云环境兼容性"""
         for attempt in range(max_retries):
@@ -81,7 +122,9 @@ class Product1688Scraper:
                     'Sec-Fetch-Dest': 'document',
                     'Sec-Fetch-Mode': 'navigate',
                     'Sec-Fetch-Site': 'cross-site',
-                    'Cache-Control': 'no-cache'
+                    'Cache-Control': 'no-cache',
+                    'DNT': '1',
+                    'TE': 'Trailers'
                 }
                 
                 # 随机延迟
@@ -91,8 +134,18 @@ class Product1688Scraper:
                 logger.info(f"第{attempt+1}次尝试请求页面: {url}")
                 logger.info(f"使用User-Agent: {user_agent[:50]}...")
                 
-                response = self.session.get(url, headers=headers, timeout=30, allow_redirects=True)
-                response.raise_for_status()
+                # 尝试直接请求
+                try:
+                    response = self.session.get(url, headers=headers, timeout=30, allow_redirects=True)
+                    response.raise_for_status()
+                except requests.RequestException as direct_error:
+                    logger.warning(f"直接请求失败: {str(direct_error)}")
+                    
+                    # 如果是云环境，尝试使用不同的方法
+                    logger.info("尝试使用备用请求方法...")
+                    response = self._cloud_friendly_request(url, headers)
+                    if not response:
+                        raise direct_error
                 
                 logger.info(f"请求成功，状态码: {response.status_code}，内容长度: {len(response.content)}")
                 logger.info(f"最终URL: {response.url}")
