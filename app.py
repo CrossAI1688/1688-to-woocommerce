@@ -270,9 +270,43 @@ with col1:
                 
                 if "error" in result:
                     st.error(f"❌ {result['error']}")
+                    
+                    # 显示调试信息
+                    if "debug_info" in result:
+                        with st.expander("🔧 调试信息", expanded=True):
+                            debug_info = result["debug_info"]
+                            
+                            if isinstance(debug_info, dict):
+                                for key, value in debug_info.items():
+                                    st.text(f"{key}: {value}")
+                            else:
+                                st.text(str(debug_info))
+                            
+                            st.info("💡 建议：")
+                            st.write("1. 检查链接是否需要登录访问")
+                            st.write("2. 尝试在浏览器中直接访问该链接")
+                            st.write("3. 确认链接是否为有效的1688商品页面")
+                            st.write("4. 云环境可能存在网络访问限制")
                 else:
                     st.session_state.product_info = result
                     st.success("✅ 1688商品信息抓取成功！")
+                    
+                    # 显示调试信息（成功情况）
+                    if "debug_info" in result:
+                        with st.expander("📊 抓取质量报告"):
+                            debug_info = result["debug_info"]
+                            
+                            if "quality_score" in debug_info:
+                                st.metric("质量评分", debug_info["quality_score"])
+                            
+                            if "quality_details" in debug_info:
+                                st.write("**详细评估:**")
+                                for detail in debug_info["quality_details"]:
+                                    st.text(detail)
+                            
+                            if "extraction_method" in debug_info:
+                                st.info(f"抓取方式: {debug_info['extraction_method']}")
+                    
                     rerun_app()
         else:
             st.error("请输入有效的1688商品链接！")

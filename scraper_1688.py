@@ -17,13 +17,31 @@ class Product1688Scraper:
     
     def __init__(self):
         self.session = requests.Session()
+        
+        # 轮换多种User-Agent，提高云环境兼容性
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15'
+        ]
+        
+        # 设置基础请求头
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
         })
     
     def validate_url(self, url: str) -> bool:
@@ -46,57 +64,110 @@ class Product1688Scraper:
             return match.group(1)
         return None
     
-    def get_page_content(self, url: str) -> Optional[BeautifulSoup]:
-        """获取页面内容"""
-        try:
-            # 添加随机延迟
-            time.sleep(random.uniform(1, 3))
-            
-            logger.info(f"开始请求页面: {url}")
-            
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            
-            logger.info(f"请求成功，状态码: {response.status_code}，内容长度: {len(response.content)}")
-            
-            # 检查是否被重定向到登录页面
-            if 'login' in response.url or 'passport' in response.url:
-                logger.warning("可能需要登录才能访问该页面")
-                return None
-            
-            # 检查内容类型
-            content_type = response.headers.get('content-type', '')
-            logger.info(f"内容类型: {content_type}")
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # 检查页面是否正常加载
-            if soup.find('title'):
-                logger.info(f"页面标题: {soup.find('title').get_text()[:100]}")
-            
-            # 检查是否有错误页面
-            error_indicators = [
-                '页面不存在',
-                '404',
-                '网页错误',
-                'page not found',
-                '服务器错误'
-            ]
-            
-            page_text = soup.get_text().lower()
-            for indicator in error_indicators:
-                if indicator in page_text:
-                    logger.warning(f"检测到错误页面指示器: {indicator}")
+    def get_page_content(self, url: str, max_retries: int = 3) -> Optional[BeautifulSoup]:
+        """获取页面内容，增强云环境兼容性"""
+        for attempt in range(max_retries):
+            try:
+                # 每次尝试使用不同的User-Agent
+                user_agent = random.choice(self.user_agents)
+                headers = {
+                    'User-Agent': user_agent,
+                    'Referer': 'https://www.1688.com/',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'cross-site',
+                    'Cache-Control': 'no-cache'
+                }
+                
+                # 随机延迟
+                delay = random.uniform(2, 5) if attempt > 0 else random.uniform(1, 2)
+                time.sleep(delay)
+                
+                logger.info(f"第{attempt+1}次尝试请求页面: {url}")
+                logger.info(f"使用User-Agent: {user_agent[:50]}...")
+                
+                response = self.session.get(url, headers=headers, timeout=30, allow_redirects=True)
+                response.raise_for_status()
+                
+                logger.info(f"请求成功，状态码: {response.status_code}，内容长度: {len(response.content)}")
+                logger.info(f"最终URL: {response.url}")
+                
+                # 检查是否被重定向到登录页面
+                if 'login' in response.url or 'passport' in response.url:
+                    logger.warning("可能需要登录才能访问该页面，尝试移动版")
+                    # 如果是桌面版，尝试移动版
+                    if 'detail.1688.com' in url:
+                        mobile_url = url.replace('detail.1688.com', 'm.1688.com')
+                        logger.info(f"尝试移动版URL: {mobile_url}")
+                        return self.get_page_content(mobile_url, max_retries=2)
                     return None
-            
-            return soup
-            
-        except requests.RequestException as e:
-            logger.error(f"请求页面失败: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"解析页面失败: {str(e)}")
-            return None
+                
+                # 检查内容类型
+                content_type = response.headers.get('content-type', '')
+                logger.info(f"内容类型: {content_type}")
+                
+                # 检查响应内容长度
+                if len(response.content) < 1000:
+                    logger.warning(f"响应内容过短: {len(response.content)} 字节，可能被阻止")
+                    if attempt < max_retries - 1:
+                        continue
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                
+                # 检查页面是否正常加载
+                title_tag = soup.find('title')
+                if title_tag:
+                    page_title = title_tag.get_text().strip()
+                    logger.info(f"页面标题: {page_title[:100]}")
+                    
+                    # 检查是否是错误页面
+                    error_keywords = ['页面不存在', '404', '网页错误', 'page not found', '服务器错误', '访问被拒绝']
+                    if any(keyword in page_title.lower() for keyword in error_keywords):
+                        logger.warning(f"检测到错误页面: {page_title}")
+                        if attempt < max_retries - 1:
+                            continue
+                        return None
+                
+                # 检查页面内容
+                page_text = soup.get_text().lower()
+                
+                # 检查是否被反爬机制阻止
+                if '验证码' in page_text or 'captcha' in page_text or '人机验证' in page_text:
+                    logger.warning("检测到验证码或反爬机制")
+                    if attempt < max_retries - 1:
+                        continue
+                
+                # 检查是否有商品内容
+                product_indicators = ['产品', '价格', '起订量', '厂家', '供应商']
+                has_product_content = any(indicator in page_text for indicator in product_indicators)
+                
+                if not has_product_content:
+                    logger.warning("页面中未找到商品相关内容")
+                    if attempt < max_retries - 1:
+                        continue
+                
+                logger.info("页面内容获取成功")
+                return soup
+                
+            except requests.RequestException as e:
+                logger.error(f"第{attempt+1}次请求失败: {str(e)}")
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2
+                    logger.info(f"等待 {wait_time} 秒后重试...")
+                    time.sleep(wait_time)
+                    continue
+            except Exception as e:
+                logger.error(f"第{attempt+1}次解析失败: {str(e)}")
+                if attempt < max_retries - 1:
+                    continue
+        
+        logger.error(f"经过 {max_retries} 次尝试仍然失败")
+        return None
     
     def extract_title(self, soup: BeautifulSoup) -> str:
         """提取商品标题"""
@@ -786,5 +857,83 @@ class Product1688Scraper:
 scraper = Product1688Scraper()
 
 def scrape_1688_product(url: str) -> Dict:
-    """抓取1688商品信息的主要函数"""
-    return scraper.scrape_product(url)
+    """抓取1688商品信息的主要函数，增强云环境调试"""
+    try:
+        logger.info(f"开始抓取1688商品: {url}")
+        
+        # 创建抓取器实例
+        scraper_instance = Product1688Scraper()
+        
+        # 抓取商品信息
+        result = scraper_instance.scrape_product(url)
+        
+        # 如果抓取成功，添加调试信息
+        if "error" not in result:
+            # 数据质量检查
+            quality_score = 0
+            quality_details = []
+            
+            if result.get("title") and result["title"] != "未找到商品标题" and len(result["title"]) > 5:
+                quality_score += 3
+                quality_details.append("✓ 标题获取成功")
+            else:
+                quality_details.append("✗ 标题获取失败")
+            
+            if result.get("price") and result["price"] != "N/A":
+                quality_score += 2
+                quality_details.append("✓ 价格获取成功")
+            else:
+                quality_details.append("✗ 价格获取失败")
+            
+            if result.get("images") and len(result["images"]) > 0:
+                quality_score += 3
+                quality_details.append(f"✓ 获取到 {len(result['images'])} 张图片")
+            else:
+                quality_details.append("✗ 图片获取失败")
+            
+            if result.get("description") and len(result["description"]) > 10:
+                quality_score += 1
+                quality_details.append("✓ 描述获取成功")
+            else:
+                quality_details.append("✗ 描述获取失败")
+            
+            if result.get("specifications") and len(result["specifications"]) > 0:
+                quality_score += 1
+                quality_details.append(f"✓ 获取到 {len(result['specifications'])} 个规格参数")
+            else:
+                quality_details.append("✗ 规格参数获取失败")
+            
+            # 添加调试信息
+            result["debug_info"] = {
+                "quality_score": f"{quality_score}/10",
+                "quality_details": quality_details,
+                "extraction_method": "移动版" if 'm.1688.com' in result.get('url', '') else "桌面版",
+                "platform": "1688",
+                "cloud_optimized": True
+            }
+            
+            logger.info(f"抓取完成，质量评分: {quality_score}/10")
+        else:
+            # 抓取失败，增强错误信息
+            if isinstance(result.get("error"), str):
+                result["debug_info"] = {
+                    "original_url": url,
+                    "error_type": "extraction_failed",
+                    "suggestion": "请检查链接是否需要登录或在本地测试",
+                    "cloud_environment": True
+                }
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"抓取异常: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "error": error_msg,
+            "debug_info": {
+                "url": url,
+                "exception_type": type(e).__name__,
+                "suggestion": "请检查网络连接和链接有效性",
+                "cloud_environment": True
+            }
+        }
