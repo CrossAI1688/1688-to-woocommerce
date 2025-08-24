@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# 配置文件
+wc_config.json
+upload_history.json
+
+# 测试报告
+test/*_test_report_*.json
+test/*_report_*.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
